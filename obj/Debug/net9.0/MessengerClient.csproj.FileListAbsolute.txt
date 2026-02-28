@@ -43,3 +43,4 @@ D:\learnL-s\MessengerClient\obj\Debug\net9.0\refint\MessengerClient.dll
 D:\learnL-s\MessengerClient\obj\Debug\net9.0\MessengerClient.pdb
 D:\learnL-s\MessengerClient\obj\Debug\net9.0\MessengerClient.genruntimeconfig.cache
 D:\learnL-s\MessengerClient\obj\Debug\net9.0\ref\MessengerClient.dll
+D:\learnL-s\MessengerClient\obj\Debug\net9.0\MessengerClient.sourcelink.json

@@ -10,7 +10,7 @@ public class Program
     private static string? jwtToken;
     private static DateTime tokenExpires;
     private static string? currentUserEmail;
-    private static int currentUserId;
+    private static string? currentUserId;
 
     public static async Task Main(string[] args)
     {
@@ -127,7 +127,7 @@ public class Program
                 jwtToken = result.GetProperty("token").GetString();
                 tokenExpires = result.GetProperty("expires").GetDateTime();
                 currentUserEmail = result.GetProperty("email").GetString();
-                currentUserId = result.GetProperty("userId").GetInt32();
+                currentUserId = result.GetProperty("userId").GetString();
 
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("\n✓ Регистрация успешна!");
@@ -194,7 +194,7 @@ public class Program
                 jwtToken = result.GetProperty("token").GetString();
                 tokenExpires = result.GetProperty("expires").GetDateTime();
                 currentUserEmail = result.GetProperty("email").GetString();
-                currentUserId = result.GetProperty("userId").GetInt32();
+                currentUserId = result.GetProperty("userId").GetString();
 
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("\n✓ Вход выполнен успешно!");
