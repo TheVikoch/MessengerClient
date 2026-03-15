@@ -7,10 +7,10 @@ namespace MessengerClient;
 public class Program
 {
     private static readonly HttpClient client = new();
-    private static string? serverUrl = "http://127.0.0.1:5267";
+    private static string? serverUrl = "http://127.0.0.1:8080";
     private static string? jwtToken;
     private static DateTime tokenExpires;
-    private static string? currentUserEmail;
+    private static string? currentUserEmail;//63fcbbfa-a421-4ffc-adb8-877a1391db06
     private static string? currentUserId;
     private static string? refreshToken;
     private static string? currentSessionId;
@@ -602,6 +602,7 @@ public class Program
             Console.WriteLine("4. Просмотреть чат по ID");
             Console.WriteLine("5. Добавить участника в группу");
             Console.WriteLine("6. Удалить участника из группы");
+            Console.WriteLine("7. Сообщения");
             Console.WriteLine("0. Назад в главное меню");
 
             Console.Write("\nВыберите действие: ");
@@ -629,6 +630,9 @@ public class Program
                         break;
                     case '6':
                         await RemoveMemberFromGroupAsync();
+                        break;
+                    case '7':
+                        await ShowMessagesMenuAsync();
                         break;
                     case '0':
                         return;
@@ -1079,4 +1083,384 @@ public class Program
             }
         }
     }
-}
+
+    // ============ Message Methods ============
+
+private static async Task ShowMessagesMenuAsync()
+        {
+            while (true)
+            {
+                Console.Clear();
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine("=== Меню сообщений ===\n");
+                Console.ResetColor();
+    
+                if (string.IsNullOrEmpty(jwtToken))
+                {
+                    Console.WriteLine("Необходимо войти для доступа к сообщениям.");
+                    return;
+                }
+    
+                Console.WriteLine("1. Отправить сообщение");
+                Console.WriteLine("2. Просмотреть сообщения");
+                Console.WriteLine("3. Показать непрочитанные");
+                Console.WriteLine("4. Отметить как прочитанное");
+                Console.WriteLine("0. Назад");
+    
+                Console.Write("\nВыберите действие: ");
+                var choice = Console.ReadKey(true).KeyChar;
+                Console.Clear();
+    
+                try
+                {
+                    switch (choice)
+                    {
+                        case '1':
+                            await SendMessageAsync();
+                            break;
+                        case '2':
+                            await GetMessagesAsync();
+                            break;
+                        case '3':
+                            await GetUnreadCountAsync();
+                            break;
+                        case '4':
+                            await MarkAsReadAsync();
+                            break;
+                        case '0':
+                            return;
+                        default:
+                            Console.WriteLine("Неверный выбор. Попробуйте снова.");
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"\nОшибка: {ex.Message}");
+                    Console.ResetColor();
+                }
+    
+                Console.WriteLine("\nНажмите любую клавишу для продолжения...");
+                Console.ReadKey(true);
+            }
+        }
+    
+        private static async Task SendMessageAsync()
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("=== Отправка сообщения ===\n");
+            Console.ResetColor();
+    
+            Console.Write("Введите ID чата: ");
+            var conversationId = Console.ReadLine()?.Trim();
+    
+            if (string.IsNullOrEmpty(conversationId) || !Guid.TryParse(conversationId, out _))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Неверный ID чата!");
+                Console.ResetColor();
+                return;
+            }
+    
+            Console.Write("Введите текст сообщения: ");
+            var content = Console.ReadLine()?.Trim();
+    
+            if (string.IsNullOrEmpty(content))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Текст сообщения обязателен!");
+                Console.ResetColor();
+                return;
+            }
+    
+            Console.Write("Введите ID сообщения для ответа (или пусто): ");
+            var replyToMessageId = Console.ReadLine()?.Trim();
+    
+            var dto = new SendMessageDto
+            {
+                ConversationId = conversationId,
+                Content = content,
+                ReplyToMessageId = string.IsNullOrEmpty(replyToMessageId) ? null : replyToMessageId
+            };
+    
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwtToken);
+    
+            try
+            {
+                var response = await client.PostAsJsonAsync($"{serverUrl}/api/messages", dto);
+    
+                if (response.IsSuccessStatusCode)
+                {
+                    var message = await response.Content.ReadFromJsonAsync<MessageDto>();
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("\n✓ Сообщение отправлено!");
+                    PrintMessage(message);
+                    Console.ResetColor();
+                }
+                else if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("✗ Вы не являетесь участником этого чата.");
+                    Console.ResetColor();
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"✗ Ошибка: {response.StatusCode} - {error}");
+                    Console.ResetColor();
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"✗ Ошибка подключения: {ex.Message}");
+                Console.ResetColor();
+            }
+            finally
+            {
+                client.DefaultRequestHeaders.Authorization = null;
+            }
+        }
+    
+        private static async Task GetMessagesAsync()
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("=== Просмотр сообщений ===\n");
+            Console.ResetColor();
+    
+            Console.Write("Введите ID чата: ");
+            var conversationId = Console.ReadLine()?.Trim();
+    
+            if (string.IsNullOrEmpty(conversationId) || !Guid.TryParse(conversationId, out _))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Неверный ID чата!");
+                Console.ResetColor();
+                return;
+            }
+    
+            Console.Write("Количество сообщений (по умолчанию 50): ");
+            var limitInput = Console.ReadLine()?.Trim();
+            int limit = 50;
+            if (!string.IsNullOrEmpty(limitInput) && int.TryParse(limitInput, out var parsedLimit))
+            {
+                if (parsedLimit < 1) parsedLimit = 1;
+                if (parsedLimit > 100) parsedLimit = 100;
+                limit = parsedLimit;
+            }
+    
+            Console.Write("Курсор (дата в формате ISO 8601, или пусто для самых новых): ");
+            var cursor = Console.ReadLine()?.Trim();
+    
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwtToken);
+    
+            try
+            {
+                var url = $"{serverUrl}/api/messages/{conversationId}?limit={limit}";
+                if (!string.IsNullOrEmpty(cursor))
+                {
+                    url += $"&cursor={Uri.EscapeDataString(cursor)}";
+                }
+    
+                var response = await client.GetAsync(url);
+    
+                if (response.IsSuccessStatusCode)
+                {
+                    var messagesResponse = await response.Content.ReadFromJsonAsync<MessagesResponseDto>();
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine($"\n✓ Получено сообщений: {messagesResponse?.Messages?.Count ?? 0}");
+                    Console.WriteLine($"Есть еще: {(messagesResponse?.HasMore ?? false ? "Да" : "Нет")}");
+                    if (!string.IsNullOrEmpty(messagesResponse?.NextCursor))
+                    {
+                        Console.WriteLine($"Следующий курсор: {messagesResponse.NextCursor}");
+                    }
+                    Console.ResetColor();
+    
+                    if (messagesResponse?.Messages != null && messagesResponse.Messages.Count > 0)
+                    {
+                        Console.WriteLine("\n--- Сообщения ---");
+                        foreach (var message in messagesResponse.Messages)
+                        {
+                            PrintMessage(message);
+                            Console.WriteLine();
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Сообщений не найдено.");
+                    }
+                }
+                else if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("✗ У вас нет доступа к этому чату.");
+                    Console.ResetColor();
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"✗ Ошибка: {response.StatusCode} - {error}");
+                    Console.ResetColor();
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"✗ Ошибка подключения: {ex.Message}");
+                Console.ResetColor();
+            }
+            finally
+            {
+                client.DefaultRequestHeaders.Authorization = null;
+            }
+        }
+    
+        private static async Task GetUnreadCountAsync()
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("=== Непрочитанные сообщения ===\n");
+            Console.ResetColor();
+    
+            Console.Write("Введите ID чата: ");
+            var conversationId = Console.ReadLine()?.Trim();
+    
+            if (string.IsNullOrEmpty(conversationId) || !Guid.TryParse(conversationId, out _))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Неверный ID чата!");
+                Console.ResetColor();
+                return;
+            }
+    
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwtToken);
+    
+            try
+            {
+                var response = await client.GetAsync($"{serverUrl}/api/messages/{conversationId}/unread-count");
+    
+                if (response.IsSuccessStatusCode)
+                {
+                    var unreadCount = await response.Content.ReadFromJsonAsync<UnreadCountDto>();
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine($"\n✓ Непрочитанных сообщений: {unreadCount?.Count ?? 0}");
+                    Console.ResetColor();
+                }
+                else if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("✗ У вас нет доступа к этому чату.");
+                    Console.ResetColor();
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"✗ Ошибка: {response.StatusCode} - {error}");
+                    Console.ResetColor();
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"✗ Ошибка подключения: {ex.Message}");
+                Console.ResetColor();
+            }
+            finally
+            {
+                client.DefaultRequestHeaders.Authorization = null;
+            }
+        }
+    
+        private static async Task MarkAsReadAsync()
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("=== Отметить как прочитанное ===\n");
+            Console.ResetColor();
+    
+            Console.Write("Введите ID чата: ");
+            var conversationId = Console.ReadLine()?.Trim();
+    
+            if (string.IsNullOrEmpty(conversationId) || !Guid.TryParse(conversationId, out _))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Неверный ID чата!");
+                Console.ResetColor();
+                return;
+            }
+    
+            Console.Write("Введите ID сообщения для отметки: ");
+            var messageId = Console.ReadLine()?.Trim();
+    
+            if (string.IsNullOrEmpty(messageId))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("ID сообщения обязателен!");
+                Console.ResetColor();
+                return;
+            }
+    
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwtToken);
+    
+            try
+            {
+                var response = await client.PostAsync($"{serverUrl}/api/messages/{conversationId}/read/{messageId}", null);
+    
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("\n✓ Сообщение отмечено как прочитанное!");
+                    Console.ResetColor();
+                }
+                else if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("✗ У вас нет доступа к этому чату.");
+                    Console.ResetColor();
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"✗ Ошибка: {response.StatusCode} - {error}");
+                    Console.ResetColor();
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"✗ Ошибка подключения: {ex.Message}");
+                Console.ResetColor();
+            }
+            finally
+            {
+                client.DefaultRequestHeaders.Authorization = null;
+            }
+        }
+    
+        private static void PrintMessage(MessageDto? message)
+        {
+            if (message == null)
+            {
+                Console.WriteLine("Сообщение не найдено.");
+                return;
+            }
+    
+            Console.WriteLine($"ID: {message.Id}");
+            Console.WriteLine($"Чат ID: {message.ConversationId}");
+            Console.WriteLine($"Отправитель: {message.Sender?.Email ?? "N/A"} (ID: {message.SenderId})");
+            Console.WriteLine($"Текст: {message.Content}");
+            Console.WriteLine($"Отправлено: {message.SentAt}");
+            if (!string.IsNullOrEmpty(message.ReplyToMessageId))
+            {
+                Console.WriteLine($"Ответ на: {message.ReplyToMessageId}");
+            }
+            Console.WriteLine($"Удалено: {(message.IsDeleted ? "Да" : "Нет")}");
+        }
+    }
